@@ -1,9 +1,6 @@
 const mysql = require('mysql2/promise')
 
-const createDatabase = async ({
-   uri = '',
-   table = 'database'
-} = {}) => {
+const createDatabase = async (uri = '', table = 'database') => {
    if (!uri) {
       throw new Error('Database URI is required')
    }
