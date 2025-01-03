@@ -51,4 +51,4 @@ const createDatabase = async ({
    return { save, fetch }
 }
 
-module.exports = createDatabase
+module.exports = { createDatabase }
