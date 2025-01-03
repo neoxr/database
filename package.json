@@ -5,7 +5,7 @@
    "main": "index.js",
    "repository": {
       "type": "git",
-      "url": "git+https://github.com/neoxr/database.git#sqlite"
+      "url": "git+https://github.com/neoxr/database.git#firebase"
    },
    "author": "Wildan Izzudin",
    "license": "ISC",
