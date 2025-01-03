@@ -1,0 +1,19 @@
+{
+   "name": "@neoxr/database",
+   "version": "1.0.0",
+   "description": "Simplicity database",
+   "main": "index.js",
+   "repository": {
+      "type": "git",
+      "url": "git+https://github.com/neoxr/database.git#sqlite"
+   },
+   "author": "Wildan Izzudin",
+   "license": "ISC",
+   "bugs": {
+      "url": "https://github.com/neoxr/database/issues"
+   },
+   "homepage": "https://github.com/neoxr/database#readme",
+   "dependencies": {
+      "sqlite3": "~13.0.2"
+   }
+}
