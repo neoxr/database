@@ -45,7 +45,8 @@ const createDatabase = async (uri = '', db_name = 'data', col_name = 'database')
 
    const fetch = async (id = 1) => {
       try {
-         const document = await collection.findOne({ _id: id })
+         // Gunakan proyeksi untuk hanya mengambil field "content"
+         const document = await collection.findOne({ _id: id }, { projection: { content: 1 } })
          return document ? document.content : {}
       } catch (error) {
          console.error('Error fetching data:', error)
