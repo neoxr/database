@@ -1,6 +1,6 @@
 const { MongoClient } = require('mongodb')
 
-const createDatabase = async (uri = '', db_name = 'data', col_name = 'database') => {
+const createDatabase = async (uri = '', db_name = 'database', col_name = 'data') => {
    if (!uri) {
       throw new Error('Database URI is required')
    }
