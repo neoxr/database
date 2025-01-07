@@ -20,7 +20,7 @@ const createDatabase = async (filename = 'database') => {
 
    const writeFile = async (data) => {
       try {
-         await fs.writeFile(filePath, JSON.stringify(data, null, 2))
+         await fs.writeFile(filePath, JSON.stringify(data))
       } catch (error) {
          console.error('Error writing file:', error)
          throw error
