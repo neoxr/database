@@ -10,7 +10,6 @@ const createDatabase = async (uri = '', db_name = 'database', col_name = 'data')
 
    try {
       client = new MongoClient(uri, {
-         poolSize: 20,
          useNewUrlParser: true,
          useUnifiedTopology: true,
          serverSelectionTimeoutMS: 5000
