@@ -31,7 +31,7 @@ const createDatabase = async (filename = 'database') => {
       try {
          const currentData = await readFile()
          currentData[id] = data
-         await writeFile(currentData)
+         await writeFile(currentData[id])
          return { status: 'saved', id, data }
       } catch (error) {
          console.error('Error saving data:', error)
