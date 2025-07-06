@@ -4,46 +4,58 @@ const Database = require('better-sqlite3')
 const createDatabase = (databaseFile = 'database') => {
    const dbPath = path.resolve(process.cwd(), databaseFile + '.db')
 
-   const createTable = (db) => {
-      db.prepare(`
-         CREATE TABLE IF NOT EXISTS data (
-            id TEXT PRIMARY KEY,
-            content TEXT
-         )
-      `).run()
-   }
+   const db = new Database(dbPath)
+
+   db.prepare(`
+      CREATE TABLE IF NOT EXISTS data (
+         id TEXT PRIMARY KEY,
+         content TEXT
+      )
+   `).run()
+
+   const selectStmt = db.prepare('SELECT content FROM data WHERE id = ?')
+   const updateStmt = db.prepare('UPDATE data SET content = ? WHERE id = ?')
+   const insertStmt = db.prepare('INSERT INTO data (id, content) VALUES (?, ?)')
 
    const save = (data, id = '1') => {
-      const db = new Database(dbPath)
-      try {
-         createTable(db)
-         const row = db.prepare(`SELECT * FROM data WHERE id = ?`).get(id)
-         const content = JSON.stringify(data)
+      const content = JSON.stringify(data)
+      let status = ''
 
+      const transaction = db.transaction(() => {
+         const row = selectStmt.get(id)
          if (row) {
-            db.prepare(`UPDATE data SET content = ? WHERE id = ?`).run(content, id)
-            return { status: 'updated', id, content }
+            updateStmt.run(content, id)
+            status = 'updated'
          } else {
-            db.prepare(`INSERT INTO data (id, content) VALUES (?, ?)`).run(id, content)
-            return { status: 'inserted', id, content }
+            insertStmt.run(id, content)
+            status = 'inserted'
          }
-      } finally {
-         db.close()
+      })
+
+      try {
+         transaction()
+         return { status, id, content }
+      } catch (error) {
+         console.error(`Gagal menyimpan data untuk id ${id}:`, error)
+         throw error
       }
    }
 
    const fetch = (id = '1') => {
-      const db = new Database(dbPath)
       try {
-         createTable(db)
-         const row = db.prepare(`SELECT * FROM data WHERE id = ?`).get(id)
+         const row = selectStmt.get(id)
          return row ? JSON.parse(row.content) : {}
-      } finally {
-         db.close()
+      } catch (error) {
+         console.error(`Gagal mengambil data untuk id ${id}:`, error)
+         return {}
       }
    }
 
-   return { save, fetch }
+   const close = () => {
+      db.close()
+   }
+
+   return { save, fetch, close }
 }
 
 module.exports = { createDatabase }
