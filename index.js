@@ -3,50 +3,56 @@ const path = require('path')
 
 const createDatabase = async (filename = 'database') => {
    const filePath = path.join(process.cwd(), filename + '.json')
+   const tempFilePath = filePath + '.tmp'
 
-   const readFile = async () => {
+   let memoryData = {}
+   let writeLock = Promise.resolve()
+
+   const writeToDisk = async (data) => {
       try {
-         const content = await fs.readFile(filePath, 'utf-8')
-         return JSON.parse(content)
+         await fs.writeFile(tempFilePath, JSON.stringify(data, null, 2), 'utf-8')
+         await fs.rename(tempFilePath, filePath)
       } catch (error) {
-         if (error.code === 'ENOENT') {
-            await writeFile({})
-            return {}
-         }
-         console.error('Error reading file:', error)
+         console.error('Fatal error writing to disk:', error)
+         try { await fs.unlink(tempFilePath) } catch (_) { }
          throw error
       }
    }
 
-   const writeFile = async (data) => {
-      try {
-         await fs.writeFile(filePath, JSON.stringify(data))
-      } catch (error) {
-         console.error('Error writing file:', error)
-         throw error
+   try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      memoryData = JSON.parse(content)
+   } catch (error) {
+      if (error.code === 'ENOENT') {
+         await writeToDisk({})
+      } else {
+         console.error('Error reading initial database file, it might be corrupt:', error)
+         throw new Error('Failed to initialize database from a potentially corrupt file.')
       }
    }
 
    const save = async (data, id = '1') => {
+      const previousLock = writeLock
+      let releaseLock
+      writeLock = new Promise(resolve => { releaseLock = resolve })
+
+      await previousLock
+
       try {
-         const currentData = await readFile()
-         currentData[id] = data
-         await writeFile(currentData[id])
+         memoryData[id] = data
+         await writeToDisk(memoryData)
          return { status: 'saved', id, data }
       } catch (error) {
          console.error('Error saving data:', error)
          return { status: 'error', error }
+      } finally {
+         releaseLock()
       }
    }
 
    const fetch = async (id = '1') => {
-      try {
-         const currentData = await readFile()
-         return currentData[id] || {}
-      } catch (error) {
-         console.error('Error fetching data:', error)
-         return {}
-      }
+      const data = memoryData[id] || {}
+      return data
    }
 
    return { save, fetch }
