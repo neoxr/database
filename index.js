@@ -14,34 +14,35 @@ const createDatabase = async (filename = 'database') => {
          await fs.rename(tempFilePath, filePath)
       } catch (error) {
          console.error('Fatal error writing to disk:', error)
-         try { await fs.unlink(tempFilePath) } catch (_) { }
+         try { await fs.unlink(tempFilePath) } catch (_) {}
          throw error
       }
    }
 
    try {
       const content = await fs.readFile(filePath, 'utf-8')
-      memoryData = JSON.parse(content)
+      const parsed = JSON.parse(content)
+      memoryData = (typeof parsed === 'object' && parsed !== null) ? parsed : {}
    } catch (error) {
       if (error.code === 'ENOENT') {
          await writeToDisk({})
       } else {
-         console.error('Error reading initial database file, it might be corrupt:', error)
-         throw new Error('Failed to initialize database from a potentially corrupt file.')
+         console.error('Error reading database file, starting fresh:', error)
+         memoryData = {}
       }
    }
 
-   const save = async (data, id = '1') => {
+   const save = async (data) => {
       const previousLock = writeLock
       let releaseLock
       writeLock = new Promise(resolve => { releaseLock = resolve })
-
+      
       await previousLock
 
       try {
-         memoryData[id] = data
+         memoryData = { ...memoryData, ...data }
          await writeToDisk(memoryData)
-         return { status: 'saved', id, data }
+         return { status: 'saved', data }
       } catch (error) {
          console.error('Error saving data:', error)
          return { status: 'error', error }
@@ -50,9 +51,8 @@ const createDatabase = async (filename = 'database') => {
       }
    }
 
-   const fetch = async (id = '1') => {
-      const data = memoryData[id] || {}
-      return data
+   const fetch = async () => {
+      return memoryData
    }
 
    return { save, fetch }
