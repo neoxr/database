@@ -1,6 +1,8 @@
 const { MongoClient } = require('mongodb')
 const { stringify, parse } = require('flatted')
 
+const CHUNK_SIZE = 1 * 1024 * 1024
+
 const createDatabase = async (uri = '', db_name = 'database') => {
    if (!uri) {
       throw new Error('Database URI is required')
@@ -16,22 +18,22 @@ const createDatabase = async (uri = '', db_name = 'database') => {
    }
 
    const db = client.db(db_name)
+   const collection = db.collection('data_storage')
 
-   const getCollectionName = (id) => `cyclic_data_store_${id}`
-
-   const save = async (data, id = 1) => {
-      const collectionName = getCollectionName(id)
-      const collection = db.collection(collectionName)
+   const save = async (data) => {
       const session = client.startSession()
-
       try {
-         const decycledArray = JSON.parse(stringify(data))
+         const serializedData = stringify(data)
+         const chunks = []
+         for (let i = 0; i < serializedData.length; i += CHUNK_SIZE) {
+            chunks.push(serializedData.substring(i, i + CHUNK_SIZE))
+         }
 
-         const documentsToInsert = decycledArray.map((content, index) => ({
-            _flatted_index: index,
-            _flatted_content: content
+         const documentsToInsert = chunks.map((chunk, index) => ({
+            _id: `db_chunk_${index}`,
+            chunk: chunk
          }))
-         
+
          await session.withTransaction(async () => {
             await collection.deleteMany({}, { session })
             
@@ -40,49 +42,39 @@ const createDatabase = async (uri = '', db_name = 'database') => {
             }
          })
          
-         return { status: 'saved', id, data }
+         return { status: 'saved', id: 1, data }
       } catch (error) {
-         console.error(`Error during save transaction for ID ${id}:`, error)
+         console.error('Error during save transaction:', error)
          return { status: 'error', error }
       } finally {
          await session.endSession()
       }
    }
 
-   const fetch = async (id = 1) => {
+   const fetch = async () => {
       try {
-         const collectionName = getCollectionName(id)
-         const collection = db.collection(collectionName)
+         const chunks = await collection.find({}).sort({ _id: 1 }).toArray()
 
-         const cursor = collection.find({}, {
-            projection: { _id: 0, _flatted_content: 1 }
-         }).sort({ _flatted_index: 1 })
-
-         const documentChunks = await cursor.toArray()
-
-         if (documentChunks.length === 0) {
+         if (chunks.length === 0) {
             return {}
          }
 
-         const flattedArray = documentChunks.map(chunk => chunk._flatted_content)
-         
-         const reconstructedData = parse(flattedArray)
+         const serializedData = chunks.map(c => c.chunk).join('')
 
-         return reconstructedData
+         return parse(serializedData)
          
       } catch (error) {
-         console.error(`Error fetching data for ID ${id}:`, error)
+         console.error(`Error fetching or parsing data:`, error)
          return {}
       }
    }
 
-   const reset = async (id = 1) => {
+   const reset = async () => {
       try {
-         const collectionName = getCollectionName(id)
-         await db.collection(collectionName).deleteMany({})
-         return { status: 'reset', message: `Data for ID ${id} has been deleted.` }
+         await collection.deleteMany({})
+         return { status: 'reset', message: 'All data has been deleted.' }
       } catch (error) {
-         console.error(`Error resetting data for ID ${id}:`, error)
+         console.error('Error resetting data:', error)
          return { status: 'error', error }
       }
    }
