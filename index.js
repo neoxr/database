@@ -18,7 +18,7 @@ const createDatabase = async (uri = '', db_name = 'database') => {
    }
 
    const db = client.db(db_name)
-   const collection = db.collection('data_storage')
+   const collection = db.collection('data')
 
    const save = async (data) => {
       const session = client.startSession()
