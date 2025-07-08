@@ -1,70 +1,97 @@
 const { MongoClient } = require('mongodb')
 const { stringify, parse } = require('flatted')
 
-const createDatabase = async (uri = '', db_name = 'database', col_name = 'data') => {
+const createDatabase = async (uri = '', db_name = 'database') => {
    if (!uri) {
       throw new Error('Database URI is required')
    }
 
    let client
-   let collection
-
    try {
-      client = new MongoClient(uri, {
-         useNewUrlParser: true,
-         useUnifiedTopology: true,
-         serverSelectionTimeoutMS: 5000
-      })
+      client = new MongoClient(uri)
       await client.connect()
-
-      const db = client.db(db_name)
-      collection = db.collection(col_name)
-
-      const collections = await db.listCollections().toArray()
-      const exists = collections.some(col => col.name === col_name)
-      if (!exists) {
-         await db.createCollection(col_name)
-      }
    } catch (error) {
-      console.error('Error connecting to MongoDB or initializing the collection:', error)
+      console.error('Error connecting to MongoDB. NOTE: Transactions require a Replica Set.', error)
       throw error
    }
 
+   const db = client.db(db_name)
+
+   const getCollectionName = (id) => `cyclic_data_store_${id}`
+
    const save = async (data, id = 1) => {
+      const collectionName = getCollectionName(id)
+      const collection = db.collection(collectionName)
+      const session = client.startSession()
+
       try {
-         const serialized = stringify(data) // convert untuk menghindari siklik
-         const filter = { _id: id }
-         const update = { $set: { content: serialized } }
-         const options = { upsert: true }
-         await collection.updateOne(filter, update, options)
+         const decycledArray = JSON.parse(stringify(data))
+
+         const documentsToInsert = decycledArray.map((content, index) => ({
+            _flatted_index: index,
+            _flatted_content: content
+         }))
+         
+         await session.withTransaction(async () => {
+            await collection.deleteMany({}, { session })
+            
+            if (documentsToInsert.length > 0) {
+               await collection.insertMany(documentsToInsert, { session })
+            }
+         })
+         
          return { status: 'saved', id, data }
       } catch (error) {
-         console.error('Error saving data:', error)
+         console.error(`Error during save transaction for ID ${id}:`, error)
          return { status: 'error', error }
+      } finally {
+         await session.endSession()
       }
    }
 
    const fetch = async (id = 1) => {
       try {
-         const document = await collection.findOne({ _id: id }, { projection: { content: 1 } })
-         return document ? parse(document.content) : {}
+         const collectionName = getCollectionName(id)
+         const collection = db.collection(collectionName)
+
+         const cursor = collection.find({}, {
+            projection: { _id: 0, _flatted_content: 1 }
+         }).sort({ _flatted_index: 1 })
+
+         const documentChunks = await cursor.toArray()
+
+         if (documentChunks.length === 0) {
+            return {}
+         }
+
+         const flattedArray = documentChunks.map(chunk => chunk._flatted_content)
+         
+         const reconstructedData = parse(flattedArray)
+
+         return reconstructedData
+         
       } catch (error) {
-         console.error('Error fetching data:', error)
+         console.error(`Error fetching data for ID ${id}:`, error)
          return {}
       }
    }
 
-   const reset = async () => {
+   const reset = async (id = 1) => {
       try {
-         await collection.deleteMany({})
-         return { status: 'reset', message: 'All data has been deleted.' }
+         const collectionName = getCollectionName(id)
+         await db.collection(collectionName).deleteMany({})
+         return { status: 'reset', message: `Data for ID ${id} has been deleted.` }
       } catch (error) {
-         console.error('Error resetting data:', error)
+         console.error(`Error resetting data for ID ${id}:`, error)
          return { status: 'error', error }
       }
    }
+   
+   const close = async () => {
+       await client.close()
+   }
 
-   return { save, fetch, reset }
+   return { save, fetch, reset, close }
 }
 
 module.exports = { createDatabase }
