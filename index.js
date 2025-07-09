@@ -18,26 +18,27 @@ const createDatabase = (databaseFile = 'database') => {
    const insertStmt = db.prepare('INSERT INTO data (id, content) VALUES (?, ?)')
 
    const save = (data, id = '1') => {
-      const content = JSON.stringify(data)
-      let status = ''
-
-      const transaction = db.transaction(() => {
-         const row = selectStmt.get(id)
-         if (row) {
-            updateStmt.run(content, id)
-            status = 'updated'
-         } else {
-            insertStmt.run(id, content)
-            status = 'inserted'
-         }
-      })
-
       try {
+         const content = JSON.stringify(data)
+         let status = ''
+
+         const transaction = db.transaction(() => {
+            const row = selectStmt.get(id)
+            if (row) {
+               updateStmt.run(content, id)
+               status = 'updated'
+            } else {
+               insertStmt.run(id, content)
+               status = 'inserted'
+            }
+         })
+
          transaction()
-         return { status, id, content }
+         return { success: true, data: { status, id, content } }
+         
       } catch (error) {
          console.error(`Gagal menyimpan data untuk id ${id}:`, error)
-         throw error
+         return { success: false, error: error }
       }
    }
 
